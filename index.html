@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buff View/Like Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ... giữ nguyên style từ trước ... */
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Buff Pro</h1>
+        <p class="subtitle">Tăng view / like Facebook &amp; TikTok với proxy tự động từ web proxy của bạn</p>
+
+        <div class="form-group">
+            <label>Nền tảng</label>
+            <select id="platform">
+                <option value="facebook">Facebook</option>
+                <option value="tiktok">TikTok</option>
+            </select>
+        </div>
+
+        <div class="row">
+            <div class="form-group">
+                <label>Hành động</label>
+                <select id="action">
+                    <option value="view">👁️ View</option>
+                    <option value="like">❤️ Like / Tim</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Số lượng</label>
+                <input type="number" id="count" value="10" min="1" max="100">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>URL bài viết (hoặc Post ID)</label>
+            <input type="text" id="url" placeholder="https://www.facebook.com/.../posts/...">
+        </div>
+
+        <!-- Khu vực lấy proxy tự động -->
+        <div class="form-group">
+            <label>
+                <input type="checkbox" id="use_auto_proxy" checked>
+                Tự động lấy proxy từ web proxy của bạn (https://proxy-delta-seven-53.vercel.app)
+            </label>
+        </div>
+
+        <div class="row" id="auto_proxy_options">
+            <div class="form-group">
+                <label>Loại proxy</label>
+                <select id="protocol">
+                    <option value="http">HTTP</option>
+                    <option value="socks4">SOCKS4</option>
+                    <option value="socks5">SOCKS5</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>API tùy chỉnh (nếu có)</label>
+                <input type="text" id="custom_proxy_url" placeholder="https://api.example.com/proxies">
+            </div>
+        </div>
+
+        <div class="form-group" id="manual_proxy_group" style="display:none;">
+            <label>Proxy thủ công (mỗi dòng một proxy)</label>
+            <textarea id="proxy_list" class="proxy-input" placeholder="http://proxy1:8080"></textarea>
+        </div>
+
+        <div class="form-group" id="token_group" style="display:none;">
+            <label>Access Token (cho Like)</label>
+            <input type="text" id="access_token" placeholder="EA...">
+        </div>
+        <div class="form-group" id="cookie_group" style="display:none;">
+            <label>Cookie (cho Like)</label>
+            <input type="text" id="cookie" placeholder="c_user=...; xs=...">
+        </div>
+
+        <button class="btn" id="startBtn">▶ Bắt đầu buff</button>
+
+        <div class="status-box" id="statusBox">
+            <div id="statusLog" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        // === Toggle hiển thị các phần ===
+        document.getElementById('use_auto_proxy').addEventListener('change', function() {
+            document.getElementById('auto_proxy_options').style.display = this.checked ? 'flex' : 'none';
+            document.getElementById('manual_proxy_group').style.display = this.checked ? 'none' : 'block';
+        });
+
+        document.getElementById('action').addEventListener('change', function() {
+            const isLike = this.value === 'like';
+            document.getElementById('token_group').style.display = isLike ? 'block' : 'none';
+            document.getElementById('cookie_group').style.display = isLike ? 'block' : 'none';
+        });
+
+        // === Gửi yêu cầu buff ===
+        const startBtn = document.getElementById('startBtn');
+        const statusBox = document.getElementById('statusBox');
+        const statusLog = document.getElementById('statusLog');
+
+        startBtn.addEventListener('click', function() {
+            const platform = document.getElementById('platform').value;
+            const action = document.getElementById('action').value;
+            const url = document.getElementById('url').value.trim();
+            const count = parseInt(document.getElementById('count').value) || 5;
+            const useAutoProxy = document.getElementById('use_auto_proxy').checked;
+            const protocol = document.getElementById('protocol').value;
+            const customProxyUrl = document.getElementById('custom_proxy_url').value.trim();
+            const manualProxyList = document.getElementById('proxy_list').value.split('\n').filter(p => p.trim());
+            const access_token = document.getElementById('access_token').value.trim();
+            const cookie = document.getElementById('cookie').value.trim();
+
+            // Validate
+            if (action === 'view' && !url) {
+                alert('Vui lòng nhập URL.');
+                return;
+            }
+            if (action === 'like' && !url && !document.getElementById('post_id')) {
+                alert('Vui lòng nhập URL hoặc Post ID.');
+                return;
+            }
+
+            const payload = {
+                platform,
+                action,
+                url,
+                count,
+                use_auto_proxy: useAutoProxy,
+                protocol,
+                custom_proxy_url: customProxyUrl,
+                proxy_list: manualProxyList,
+                access_token,
+                cookie
+            };
+
+            statusBox.classList.add('active');
+            statusLog.innerHTML = `<div><span class="spinner"></span> Đang xử lý...</div>`;
+            startBtn.disabled = true;
+
+            fetch('/buff', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.task_id) {
+                    statusLog.innerHTML = `<div>✅ Task ID: ${data.task_id}</div>`;
+                    pollStatus(data.task_id);
+                } else {
+                    statusLog.innerHTML = `<div class="result-error">❌ Lỗi: ${data.error}</div>`;
+                    startBtn.disabled = false;
+                }
+            })
+            .catch(err => {
+                statusLog.innerHTML = `<div class="result-error">❌ Lỗi kết nối: ${err.message}</div>`;
+                startBtn.disabled = false;
+            });
+        });
+
+        function pollStatus(taskId) {
+            let attempts = 0;
+            const maxAttempts = 60;
+            const interval = setInterval(() => {
+                fetch(`/status/${taskId}`)
+                .then(res => res.json())
+                .then(data => {
+                    attempts++;
+                    if (data.status === 'done' || data.status === 'error') {
+                        clearInterval(interval);
+                        if (data.status === 'done') {
+                            statusLog.innerHTML = `<div class="result-success">✅ Thành công: ${data.success}/${data.total} lần. ${data.message || ''}</div>`;
+                        } else {
+                            statusLog.innerHTML = `<div class="result-error">❌ Lỗi: ${data.message}</div>`;
+                        }
+                        startBtn.disabled = false;
+                    } else if (attempts >= maxAttempts) {
+                        clearInterval(interval);
+                        statusLog.innerHTML = `<div class="result-error">⏱️ Timeout</div>`;
+                        startBtn.disabled = false;
+                    } else {
+                        statusLog.innerHTML = `<div><span class="spinner"></span> Đang thực hiện... (${Math.round(attempts/60*100)}%)</div>`;
+                    }
+                })
+                .catch(() => {});
+            }, 1500);
+        }
+
+        // Khởi tạo trạng thái hiển thị
+        document.getElementById('auto_proxy_options').style.display = 'flex';
+        document.getElementById('manual_proxy_group').style.display = 'none';
+        document.getElementById('token_group').style.display = 'none';
+        document.getElementById('cookie_group').style.display = 'none';
+    </script>
+</body>
+  </html>
